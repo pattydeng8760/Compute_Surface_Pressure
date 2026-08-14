@@ -4,11 +4,16 @@ The computation is parallelized over blocks of nodes to improve performance.
 The main function `CSD_surface_data` the input and segments the data into blocks for parallel processing, 
 while the worker function `compute_CSD_block` handles the CSD computation for each block of nodes.
 """
+import os
+from datetime import datetime
+import numpy as np
+import h5py
 import scipy
 import scipy.signal as signal
 from scipy.signal import welch, coherence
 import multiprocessing
 from multiprocessing import Pool, cpu_count, Value, Lock
+from .utils import next_greater_power_of_2
 
 
 def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str, var: str, dt: float, reload: bool = True, block_size: int = 1000, nchunk: int = 3):

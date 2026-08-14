@@ -1,14 +1,20 @@
-import os, sys, time, logging, glob
-from antares import * 
+import os
+import sys
+import time
+import logging
+import glob
+import argparse
+from types import SimpleNamespace
+from datetime import datetime
 import numpy as np
 import scipy
 import scipy.signal as signal
-from scipy.signal import welch, coherence
 import h5py
-from datetime import datetime
-import argparse
-from types import SimpleNamespace
 
+from .extractor import extract_files, extract_surface, extract_data, extract_surface_line
+from .surface_psd import PSD_surface_data, source_psd
+from .surface_csd import CSD_surface_data, source_csd
+from .utils import fft_surface_data, timer
 
 def parse_arguments(argv=None):
     """
@@ -123,7 +129,7 @@ class SurfacePressure():
             print(f"{name:20s}: {value}")
         text = " End of Input Arguments "
         print(f'\n{text:.^80}\n')
-
+    
     def prepare_inputs(self):
         # Extracting the FWH data files and surface mesh
         try:
