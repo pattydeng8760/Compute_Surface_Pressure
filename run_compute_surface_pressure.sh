@@ -1,13 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=surf-pressure
-#SBATCH --account=def-plavoie
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=192
 #SBATCH --time=03:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
+#SBATCH --account=rrg-plavoie
 
 # =============================================================================
 # run_compute_surface_pressure.sh
