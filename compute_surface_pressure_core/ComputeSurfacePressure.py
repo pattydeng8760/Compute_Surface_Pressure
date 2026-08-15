@@ -25,7 +25,7 @@ def parse_arguments(argv=None):
     )
     # Manditory arguments
     parser.add_argument("--sol-dir", type=str, required=True, help="Solution directory for the FWH data from AVBP.")
-    parser.add_argument("--freq-select", ,type=float, nargs="+",default=[1000, 1500, 2000, 2500, 3000], help="Comma-separated list of frequencies to select for analysis. Default is 1000 to 3000 Hz in steps of 500 Hz as list.")
+    parser.add_argument("--freq-select",type=float, nargs="+",default=[1000, 1500, 2000, 2500, 3000], help="Comma-separated list of frequencies to select for analysis. Default is 1000 to 3000 Hz in steps of 500 Hz as list.")
     parser.add_argument("--mesh-file", type=str, required=True, help="AVBP mesh file.")
     parser.add_argument("--surface-patches", "-sp",type=str, nargs="+",default=["Airfoil_Surface"], help="List of surface patches to include in the analysis.")
     parser.add_argument("--working-dir", type=str, default=os.getcwd(), help="Destination directory for the extracted files. Default is current working directory.")
@@ -64,11 +64,12 @@ def parse_arguments(argv=None):
     parser.add_argument("--camber-file", type=str, default=None, help="Optional camber line file in x,y,z stored in .txt for surface line extraction. If provided, will use this camber line file for extraction.")
     parser.add_argument("--data-size", type=int, default=1000, help="Number of data points to extract for surface line extraction. Default is 1000.")
     
-    returns parser.parse_args(argv)
+    return parser.parse_args(argv)
 
 
 class SurfacePressure():
     def __init__(self, args):
+        self.args = args
         text = "Beginning Compute Surface Pressure Post-Processing"
         print(f'\n{text:=^100}\n')
         self.sol_dir = args.sol_dir
@@ -119,7 +120,7 @@ class SurfacePressure():
             self.surf_line.airfoil_file = args.airfoil_file
             self.surf_line.camber_file = args.camber_file
             
-        self._print_args(self)
+        self._print_args()
     
     def _print_args(self):
         """Print all CLI / input arguments stored in self.args."""
@@ -133,33 +134,33 @@ class SurfacePressure():
     def prepare_inputs(self):
         # Extracting the FWH data files and surface mesh
         try:
-            self.ntime, self.FWH_data_dir = extract_files(self.sol_dir,self.working_dir, self.option, self.nskip, self.max_file, reload=self.reload)
+            self.ntime, self.FWH_data_dir = extract_files(self.sol_dir, self.working_dir, self.option, self.nskip, self.max_file, reload=self.reload)
         except: 
             logging.error("Error in extracting files. Please check the FWH solution directory and file names.")
             raise
         
         # Extracting the surface mesh from the AVBP mesh file
         try:
-            self.airfoil_mesh = extract_surface(self.mesh_file, self.working_dir, self.surface_patches, reload=self.reload)
+            self.airfoil_mesh = extract_surface(self.mesh_file, self.surface_patches, self.working_dir, reload=self.reload)
         except:
             logging.error("Error in extracting surface mesh. Please check the mesh file and surface patch names.")
             raise
         
         # Extracting the surface pressure data
         try:
-            self.surface_pressure_data, self.dt = extract_data(self.working_dir, FWH_data_dir, airfoil_mesh, dtype='float64', reload=self.reload)
+            self.surface_pressure_data, self.dt = extract_data(self.working_dir,self.FWH_data_dir,self.airfoil_mesh,dtype='float64',reload=self.reload)
         except:
             logging.error("Error in extracting surface pressure data. Please check the FWH data files and surface mesh.")
             raise
     
-    def run_compute(args):
+    def run_compute(self):
         if self.psd.run:
             # The source PSD
             surface_pressure_psd_data = PSD_surface_data(self.surface_pressure_data, 
                 self.var, 
                 self.dt, 
                 reload=True, 
-                block_size=args.block_size
+                block_size=self.psd.block_size,
             )
             
             source_psd(self.working_dir, 
@@ -182,7 +183,7 @@ class SurfacePressure():
                 self.var, 
                 self.dt, 
                 reload=True, 
-                block_size=args.block_size, 
+                block_size=args.csd.block_size, 
                 nchunk=self.csd.nchunk
             )
             
@@ -226,3 +227,16 @@ class SurfacePressure():
                 airfoil_file=self.surf_line.airfoil_file, 
                 camber_file=self.surf_line.camber_file
             )
+
+def main(argv=None):
+    """
+    Main entry point for surface-pressure post-processing.
+    """
+    args = parse_arguments(argv)
+    surface_pressure = SurfacePressure(args)
+    surface_pressure.prepare_inputs()
+    surface_pressure.run_compute()
+
+
+if __name__ == "__main__":
+    main()

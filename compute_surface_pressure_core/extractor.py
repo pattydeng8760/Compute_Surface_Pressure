@@ -37,21 +37,22 @@ def extract_files(sol_dir:str, working_dir:str, option:int=1, nskip:int=1, max_f
     # An array with all the files in the source directory
     arr,arr_dest = [], []
     arr += sorted(glob.glob('{0:s}/{1:s}*.h5'.format(sol_dir,'FWH_Airfoil_')))
+    print('----> Beginning the extraction of the transient files from the source directory')
     if os.path.exists(output):
-        print('There are {0:d} files in the source directory'.format(len(arr)))
+        print('      There are {0:d} files in the source directory'.format(len(arr)))
         arr_dest += sorted(glob.glob('{0:s}/*.h5'.format(output)))
-        print('There are {0:d} files in the destination directory'.format(len(arr_dest)))
-        print('After extraction there should be {0:d} files in the destination directory'.format(int(np.floor(len(arr))/nskip)))
+        print('      There are {0:d} files in the destination directory'.format(len(arr_dest)))
+        print('      After extraction there should be {0:d} files in the destination directory'.format(int(np.floor(len(arr))/nskip)))
     # Checking if all the files from the source directory are already extracted
     if int(len(arr_dest)) == int(np.floor(len(arr))/nskip) or (reload == False and os.path.exists(output)):
-        text = 'All the files are already extracted to destination directory'
+        text = '\n----> All the files are already extracted to destination directory, Extraction is skipped'
         print(f'{text}')
     else:
         # Removing the directory if exists
         if os.path.exists(output):
             shutil.rmtree(output, ignore_errors=True)
         os.makedirs(output, exist_ok = False)
-        if Option == 1:
+        if option == 1:
             # Only take n files
             arr = os.listdir(sol_dir)
             arr = list(arr)
@@ -61,11 +62,12 @@ def extract_files(sol_dir:str, working_dir:str, option:int=1, nskip:int=1, max_f
                 source = os.path.join(sol_dir,arr[i])
                 destination = output
                 shutil.copy(source,destination)
-                print('Copying file %s' %os.path.split(source)[1]) if np.mod(i,100) == 0 else None
+                print('    Copying file: %s' %os.path.split(source)[1]) if np.mod(i,100) == 0 else None
+                print('    Copying file: %s' %os.path.split(source)[1]) if i == np.min([int(max_file),int(len(arr))])-1 else None
             arr2 = os.listdir(output)
             arr2 = list(arr2)
             arr2.sort()
-        elif Option == 2:
+        elif option == 2:
             # Skip every n files
             arr = os.listdir(sol_dir)
             arr = list(arr)
@@ -75,11 +77,12 @@ def extract_files(sol_dir:str, working_dir:str, option:int=1, nskip:int=1, max_f
                 source = os.path.join(sol_dir,arr[int(i*nskip-1)])
                 destination = output
                 shutil.copy(source,destination)
-                print('Copying file %s' %os.path.split(source)[1]) if np.mod(i,100) == 0 else None
+                print('    Copying file %s' %os.path.split(source)[1]) if np.mod(i,100) == 0 else None
     list_files=[]
     list_files+=sorted(glob.glob('{0:s}/*.h5'.format(output)))
     ntime = np.shape(list_files)[0]
-    print('The files are copied to: \n%s' %output)
+    output = os.path.abspath(output)
+    print('\n----> The files are copied to: \n   %s' %output)
     text = 'File Extraction Complete'
     print(f'\n{text:.^80}\n')  
     return ntime, output
@@ -100,7 +103,6 @@ def extract_surface(mesh_file:str,input_surface:list, working_dir:str,reload:boo
     print(f'\n{text:.^80}\n')
     airfoil_mesh = os.path.join(working_dir,'Airfoil_Surface_Mesh.h5')
     if os.path.exists(airfoil_mesh) == True and reload == False:
-        print('----> LES Airfoil Surface Mesh already extracted at: {0:s}'.format(airfoil_mesh))
         # Loading the mesh
         r = Reader('hdf_antares')
         r['filename'] = airfoil_mesh
@@ -116,7 +118,7 @@ def extract_surface(mesh_file:str,input_surface:list, working_dir:str,reload:boo
         r = Reader('hdf_avbp')
         r['filename'] = mesh_file
         base  = r.read() # b is the Base object of the Antares API
-        print('----> The complete mesh:')
+        print('\n----> The complete mesh:')
         base.show()
         airfoil_base = Family()
         for surf_name in input_surface:
@@ -150,6 +152,7 @@ def extract_surface(mesh_file:str,input_surface:list, working_dir:str,reload:boo
             nodes = merged[surf_name][0].shape[0]
         else: 
             nodes = merged['0000'][0].shape[0]
+    airfoil_mesh = os.path.abspath(airfoil_mesh)
     print('\n----> Output Statistics')
     print('      The Extracted surface mesh is saved in: %s' %airfoil_mesh)
     print('      The number of nodes in on the airofoil surface is: %d nodes' %nodes)
@@ -179,33 +182,29 @@ def extract_data(working_dir, data_dir, airfoil_mesh, dtype='float64', reload:bo
         print('----> The pressure data is already extracted at: \n{0:s}'.format(working_dir,'pressure_airfoil.hdf5'))
         print('\n----> Loading the pressure data')
         surface_pressure_data = os.path.join(working_dir,'pressure_airfoil.hdf5')
-        l=sorted(glob.glob(os.path.join(data_dir,'FWH_Airfoil_0000*.h5')))
-        with h5py.File(l[-2], 'r') as f:
-            t1 = f['frame_data/time'][()]
-        with h5py.File(l[-1], 'r') as f:
-            t2 = f['frame_data/time'][()]
-        dt = t2 - t1
-        dt = dt[0]
+        with h5py.File(surface_pressure_data, 'r') as f:
+            dt = f.attrs['dt']
+            last_extracted = f.attrs['Extracted Date']
+            print('      The pressure data was last extracted on: %s' %last_extracted)
     else:  
         print('\n----> Extacting the pressure data from FWH files')
         # The directory information
         l=sorted(glob.glob(os.path.join(data_dir,'FWH_Airfoil_0000*.h5')))
         # The number of files (timesteps)
         nb_files=len(l)
-        print('The number of time steps is %d\n' %nb_files)
+        print('      The number of time steps is %d\n' %nb_files)
         # Extract the number of nodal points from the mesh
-        file = airfoil_mesh
         r = Reader('hdf_antares')
-        r['filename'] = os.path.join(working_dir,file)
+        r['filename'] = airfoil_mesh
         base  = r.read() # b is the Base object of the Antares API
         nb_points = int(base[0][0].shape[0])
         # Pre allocating space for the pressure data array of size nb_points (nodes) x nb_files (time steps)
         data = np.zeros((nb_points,nb_files), dtype=dtype)
         data_time = np.zeros((nb_files), dtype=dtype)
-        print('The surface data will be extracted to a %d (nodes) x %d (timestep), array' %(nb_points,nb_files))
+        print('----> The surface data will be extracted to a %d (nodes) x %d (timestep), array' %(nb_points,nb_files))
         # Running the loop to extract the pressure data and export as hdf5 file
         for it,filename in enumerate(l):
-                print('Extracting file %s ...' %os.path.split(filename)[1]) if np.mod(it,100) == 0 else None
+                print('      Extracting file %s ...' %os.path.split(filename)[1]) if np.mod(it,100) == 0 else None
                 with h5py.File(filename, 'r') as f:
                         # The pressure array from FWH data into 1D 
                         press = f['frame_data/pressure'][()]
@@ -218,13 +217,16 @@ def extract_data(working_dir, data_dir, airfoil_mesh, dtype='float64', reload:bo
                         time = f['frame_data/time'][()]
                         data[:,it]=press.astype(dtype)
                         data_time[it] = time[0]
-                print('The last file extracted is %s' %os.path.split(filename)[1]) if it == nb_files-1 else None
+                print('      The last file extracted is %s' %os.path.split(filename)[1]) if it == nb_files-1 else None
         # Saving the output as hdf5 file
         dt = np.mean(np.diff(data_time))
         data = replace_zeros_vectorized(data)
         mean_pressure = np.mean(data, axis=1)  # Mean across timesteps
         rms_pressure = np.sqrt(np.mean((data - mean_pressure[:, None]) ** 2, axis=1))  # RMS using mean-subtracted values
-        with h5py.File('pressure_airfoil.hdf5', 'w') as f:
+        
+        surface_pressure_data = os.path.join(working_dir,'pressure_airfoil.hdf5')
+        surface_pressure_data = os.path.abspath(surface_pressure_data)
+        with h5py.File(surface_pressure_data, 'w') as f:
             f.create_dataset('pressure', data=data, dtype=dtype)
             f.create_dataset("mean_pressure", data=mean_pressure, dtype=dtype)
             f.create_dataset("rms_pressure", data=rms_pressure, dtype=dtype)
@@ -235,11 +237,10 @@ def extract_data(working_dir, data_dir, airfoil_mesh, dtype='float64', reload:bo
             f.attrs['Source Path'] = data_dir
             f.attrs['Mesh Path'] = airfoil_mesh
         # Path to the surface pressure data
-        surface_pressure_data = os.path.join(working_dir,'pressure_airfoil.hdf5')
     print('\n----> Statistics of the extracted pressure data')
-    print('The pressure data is saved in: \n%s' %surface_pressure_data)
-    print('The pressure data storage size is {0:2.4f} MB' .format(os.path.getsize(surface_pressure_data)/1e6))
-    print('The time step is dt = {0:5.6e}' .format(dt))
+    print('      The pressure data is saved in: \n      %s' %surface_pressure_data)
+    print('      The pressure data storage size is {0:2.4f} MB' .format(os.path.getsize(surface_pressure_data)/1e6))
+    print('      The time step is dt = {0:5.6e}' .format(dt))
     text = 'Data Extraction Complete!'
     print(f'\n{text:.^80}\n')  
     return surface_pressure_data, dt
@@ -290,7 +291,7 @@ def extract_surface_line( airfoil_mesh: str,
     # Load airfoil surface mesh
     r = Reader("hdf_antares")
     r["filename"] = os.path.join(airfoil_mesh)
-    print("\n----> Opening the airfoil surface mesh")
+    print("----> Loading the airfoil surface mesh")
     mesh = r.read()
     mesh.compute_cell_volume()
     mesh.cell_to_node()
@@ -303,8 +304,7 @@ def extract_surface_line( airfoil_mesh: str,
     with h5py.File(os.path.join(surface_pressure_data), "r") as fin:
         data = {var: fin[f"/{var}"][:]}
         dt = fin.attrs["dt"]
-    print("The data shape is:")
-    print(data[var].shape)
+    print("      The data shape is: {0}".format(data[var].shape))
 
     # Create a new base for cut treatment
     b = Base()
@@ -340,8 +340,7 @@ def extract_surface_line( airfoil_mesh: str,
     t["normal"] = [int(x_n), int(y_n), int(z_n)]
     b_cut = t.execute()
     b_cut.show()
-    print(
-        "The cut origin is: (x,y,z) = (%f,%f,%f) with a normal vector of (x,y,z) = (%d,%d,%d).\n"
+    print("      The cut origin is: (x,y,z) = (%f,%f,%f) with a normal vector of (x,y,z) = (%d,%d,%d).\n"
         % (x_o, y_o, z_o, x_n, y_n, z_n))
     
     # Build clean source/dest arrays (N,3) float64 with NaN/Inf guards
@@ -375,8 +374,7 @@ def extract_surface_line( airfoil_mesh: str,
     # The Logic for Spanwise aligned line, this requies a cut normal to the x-axis (x_n=1, streamwise-normal) to create a 2-D plane, then extracting the surface points only from the 2D plane
     if x_n == 1:
         # Spanwise line at fixed x=cut_loc, fixed y=max(dest_y), varying z
-        print(
-            "Applying cut along the suction span at {0:.4f} % chord length from Leading Edge".format(
+        print("      Applying cut along the suction span at {0:.4f} % chord length from Leading Edge".format(
                 cut_loc_percent
             )
         )
@@ -397,10 +395,7 @@ def extract_surface_line( airfoil_mesh: str,
     elif z_n == 1:
         # NOTE: requies a physical airfoil coordinate file and camber line file to identify the suction surface! 
         # Chordwise line at fixed z=z_o, using airfoil coordinate file for (x,y) curve
-        print(
-            "Applying cut along the suction chord at {0:.2f} % chord length from the tip".format(
-                z_loc_percent)
-        )
+        print("      Applying cut along the suction chord at {0:.2f} % chord length from the tip".format(z_loc_percent))
         
         # You used AoA-specific coord files; preserve that convention
         airfoil_file = f"/project/rrg-plavoie/denggua1/Coordinates/airfoil_{AoA}_AOA.txt" if airfoil_file is not None else airfoil_file
@@ -455,7 +450,7 @@ def extract_surface_line( airfoil_mesh: str,
     # data[var] is (n_nodes, n_timesteps) in your extraction
     # Pull all nodes for all timesteps at once: (data_size, n_timesteps)
     time_series = np.asarray(data[var][index, :], dtype=np.float64)
-    print("The timeseries size %d nodes x %d timesteps\n" % (time_series.shape[0], time_series.shape[1]))
+    print("      The timeseries size %d nodes x %d timesteps\n" % (time_series.shape[0], time_series.shape[1]))
     
     
     # Save output
@@ -477,7 +472,7 @@ def extract_surface_line( airfoil_mesh: str,
         time_data = file.create_group("Timeseries Data")
         time_data.create_dataset("time_series", data=time_series.astype(np.float64))
 
-    print("The surface line data is saved in:\n %s" % outputname)
+    print("      The surface line data is saved in:\n %s" % outputname)
     text = "Surface Line Extraction Complete"
     print(f"\n{text:.^80}\n")
     return outputname

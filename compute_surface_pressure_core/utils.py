@@ -276,7 +276,7 @@ def replace_zeros_vectorized(data):
     mask = data == 0  # Boolean mask of zero entries
     
     if not np.any(mask):  # If no zeros are found, return early
-        print("No zeros detected. Skipping replacement.")
+        print("         No zeros detected. Skipping replacement.")
         return data  
 
     print("Replacing zeros with nearest neighbor values...")
