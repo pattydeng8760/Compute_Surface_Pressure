@@ -6,6 +6,7 @@ import time
 import numpy as np
 import h5py
 from scipy.fft import fft
+from antares import Reader, Base, Zone, Instant, Writer
 
 def timer(func):
     """ Decorator to time the function func to track the time taken for the function to run"""
@@ -236,7 +237,7 @@ def spod_parser(nt, nx, window, weight, nOvlp, nDFT, method):
     if (nDFT < 4) or (nBlks < 2):
         raise ValueError('User sepcified window and nOvlp leads to wrong nDFT and nBlk.')
     print('--------------------------------------')
-    print('SPOD parameters summary:'              )
+    print('FFT parameters summary:'              )
     print('--------------------------------------')
     print('number of DFT points :{0:d}'.format(int(nDFT)))
     print('number of blocks is  :{0:d}'.format(int(nBlks)))
@@ -302,3 +303,55 @@ def replace_zeros_vectorized(data):
         data[:, i] = np.where(update_mask, data[:, i + 1], data[:, i])
 
     return data
+
+def source_fft(output_path: str, surface_mesh: str, data:str, data_fft: str, freq_select: list = [500, 2000]):
+    text = 'Performing Surface Source Localization'
+    print(f'\n{text:.^80}\n')
+    # Loading the surface mesh
+    print('----> Loading the Airfoil Surface Mesh')
+    reader = Reader('hdf_antares')
+    reader['filename'] = surface_mesh
+    base = reader.read()  # base is the Base object of the Antares API
+    base.show()
+    # Extract the coordinates of the mesh nodes
+    x,y,z = base[0][0]["x"],  base[0][0]["y"],  base[0][0]["z"]
+    num_nodes = len(x)
+    # Loading the Surface pressure data
+    print('\n----> Loading the Pressure Data: {0:s}'.format(data))
+    with h5py.File(data, 'r') as h5f:
+        p_mean = h5f['mean_pressure'][:]
+        p_rms = h5f['rms_pressure'][:]
+    # Loading the Fourier Transform data
+    print('\n----> Loading the Fourier Transform of the Pressure Data: {0:s}'.format(data_fft))
+    with h5py.File(data_fft, 'r') as h5f:
+        p_hat = h5f['pressure_fft'][:]
+        freq = h5f['frequency'][:]
+        k = np.pi * 2 * freq / 340  # The wavenumber
+    assert p_hat.shape[0] == num_nodes, 'The number of nodes in the pressure data and the mesh do not match'
+    print('The pressure data is %d (nodes) x %d (frequency bins)' % (p_hat.shape[0], p_hat.shape[1]))
+    # Create an animated base for the results
+    print('\n----> Saving the surface fft data for visualization')
+    animated_base = Base()
+    animated_base['0'] = Zone()
+    animated_base[0].shared["x"],animated_base[0].shared["y"],animated_base[0].shared["z"] = x, y, z
+    animated_base[0].shared.connectivity = base[0][0].connectivity
+    animated_base[0][str(0)] = Instant()
+    
+    # Save the filtered data for the selected frequencies
+    for k in range(0, len(freq_select)):
+        argi = np.argmin(np.abs(freq - freq_select[k]))
+        data_orig = 10 * np.log10(np.real(p_hat[:, argi]) / (2e-5 ** 2))
+        animated_base[0][str(0)]['frequency_{0:2d}_Hz_P_orig_dB'.format(int(freq_select[k]))] = data_orig
+        animated_base[0][str(0)]['frequency_{0:2d}_Hz_P_orig_Spp'.format(int(freq_select[k]))] = np.real(p_hat[:, argi])
+    # Write to output file
+    animated_base[0][str(0)]['Pressure_Mean'] = p_mean
+    animated_base[0][str(0)]['Pressure_RMS'] = p_rms
+    w = Writer('hdf_antares')
+    w['filename'] = os.path.join(output_path, 'Surface_fft')
+    w['base'] = animated_base
+    w['dtype'] = 'float64'
+    w.dump()
+    del animated_base
+    print('\n----> Saving the output surface fft data as: {0:s}'.format(os.path.join(output_path, 'Surface_fft.hdf5')))
+    text = 'Surface FFT Complete!'
+    print(f'\n{text:.^80}\n')

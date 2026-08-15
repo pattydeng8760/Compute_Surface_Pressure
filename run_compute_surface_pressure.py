@@ -51,9 +51,9 @@ CONFIG: dict[str, Any] = {
     "var": "pressure",
 
     # Workflows
-    "psd": True,
-    "csd": True,
-    "fft": False,
+    "psd": False,
+    "csd": False,
+    "fft": True,
     "surf_line": False,
 
     # PSD/CSD settings

@@ -14,7 +14,7 @@ import h5py
 from .extractor import extract_files, extract_surface, extract_data, extract_surface_line
 from .surface_psd import PSD_surface_data, source_psd
 from .surface_csd import CSD_surface_data, source_csd
-from .utils import fft_surface_data, timer
+from .utils import fft_surface_data, timer, source_fft
 
 def parse_arguments(argv=None):
     """
@@ -210,7 +210,6 @@ class SurfacePressure():
             )
             
             source_fft(self.working_dir, 
-                self.mesh_file, 
                 self.airfoil_mesh, 
                 self.surface_pressure_data, 
                 surface_pressure_fft_data, 
