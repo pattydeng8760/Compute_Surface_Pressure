@@ -6,6 +6,7 @@ while the worker function `compute_PSD_block` handles the PSD computation for ea
 """
 import os
 from datetime import datetime
+from antares import Reader, Base, Zone, Instant, Writer
 import numpy as np
 import h5py
 import scipy
@@ -40,9 +41,13 @@ def PSD_surface_data(surface_pressure_data: str, var: str, dt: float, reload: bo
     
     psd_file_path = surface_pressure_data.replace('.hdf5', '_psd.hdf5')
     if os.path.exists(psd_file_path) and not reload:
-        print(f"{psd_file_path} already exists. Skipping PSD computation.")
+        print("----> PSD file already exist, Reload is set to False.")
+        print(f"      PSD File Path: {psd_file_path} ")
+        with h5py.File(psd_file_path, 'r') as h5f_out:
+            date_extracted = h5f_out.attrs.get('Date Computed', 'Unknown')
+        print("      PSD data was previously computed on:", date_extracted)
     else:
-        print("---->Computing PSD for surface pressure data.")
+        print("----> Computing PSD for surface pressure data.")
         # Load the pressure data from the HDF5 file.
         with h5py.File(surface_pressure_data, 'r') as h5f:
             data = h5f[var][:]
@@ -51,12 +56,12 @@ def PSD_surface_data(surface_pressure_data: str, var: str, dt: float, reload: bo
                 data = np.swapaxes(data, 0, 1)
                 
         nt, nx = data.shape
-        print("The surface data is %d (nodes) x %d (timesteps)" % (nx, nt))
+        print("      The surface data is %d (nodes) x %d (timesteps)" % (nx, nt))
         
         # Determine number of blocks.
         nblocks = int(np.ceil(nx / block_size))
         num_processes = multiprocessing.cpu_count()
-        print("Processing %d blocks of up to %d nodes each using %d cores." % (nblocks, block_size, num_processes))
+        print("      Processing %d blocks of up to %d nodes each using %d cores." % (nblocks, block_size, num_processes))
         
         # Create list of arguments for each block.
         block_args = []
@@ -76,7 +81,7 @@ def PSD_surface_data(surface_pressure_data: str, var: str, dt: float, reload: bo
         psd_all = np.concatenate([res[0] for res in results], axis=0)
         
         # Save the computed frequency and PSD data.
-        print("Saving PSD data to file:", psd_file_path)
+        print("      Saving PSD data to file:", psd_file_path)
         with h5py.File(psd_file_path, 'w') as h5f_out:
             h5f_out.create_dataset('frequency', data=freq)
             h5f_out.create_dataset('pressure_psd', data=psd_all)
@@ -110,7 +115,7 @@ def compute_PSD_block(args):
     """
     block_data, dt, nchunk, block_number = args
     if block_number % 100 == 0:  
-        print(f"    Computing PSD for block {block_number}")
+        print(f"        Computing PSD for block {block_number}")
         
     n_nodes = block_data.shape[1]
     n_time = block_data.shape[0]
@@ -133,7 +138,7 @@ def compute_PSD_block(args):
     return psd_block, freq
 
 
-def source_psd(output_path: str,mesh_fileDir: str,mesh_fileName: str, surface_mesh: str, data: str, data_psd: str,
+def source_psd(output_path: str, surface_mesh: str, data: str, data_psd: str,
     freq_select: list = (500, 2000),
     df: float = 50.0,                  # <-- band width in Hz
     band_stat: str = "mean",           # "mean" (band-average) or "sum" (band-integrated)
@@ -146,8 +151,6 @@ def source_psd(output_path: str,mesh_fileDir: str,mesh_fileName: str, surface_me
     
     Args: 
         output_path (str): Directory where the output HDF5 file will be saved.
-        mesh_fileDir (str): Directory containing the surface mesh file.
-        mesh_fileName (str): Name of the surface mesh file.
         surface_mesh (str): Path to the surface mesh file.
         data (str): Path to the HDF5 file containing pressure statistics (mean, RMS, min).
         data_psd (str): Path to the HDF5 file containing pressure PSD data.
@@ -157,8 +160,6 @@ def source_psd(output_path: str,mesh_fileDir: str,mesh_fileName: str, surface_me
         pref (float): Acoustic reference pressure in Pascals for converting PSD to dB.
     """
     
-    
-    base_mesh = os.path.join(mesh_fileDir, mesh_fileName)
     text = 'Performing Surface Source Localization based on PSD'
     print(f'\n{text:.^80}\n')
 
@@ -182,12 +183,12 @@ def source_psd(output_path: str,mesh_fileDir: str,mesh_fileName: str, surface_me
 
     # Loading the PSD data
     print(f'\n----> Loading the PSD of the Pressure Data: {data_psd}')
-    with h5py.File(data_psd, 'r') as h5f:
-        p_hat = h5f['pressure_psd'][:]   # shape: (num_nodes, nfreq)
-        freq  = h5f['frequency'][:]      # shape: (nfreq,)
+    with h5py.File(data_psd, 'r') as h5f2:
+        p_hat = h5f2['pressure_psd'][:]   # shape: (num_nodes, nfreq)
+        freq  = h5f2['frequency'][:]      # shape: (nfreq,)
 
     assert p_hat.shape[0] == num_nodes, 'The number of nodes in the pressure data and the mesh do not match'
-    print('The pressure data is %d (nodes) x %d (frequency bins)' % (p_hat.shape[0], p_hat.shape[1]))
+    print('      The pressure data is %d (nodes) x %d (frequency bins)' % (p_hat.shape[0], p_hat.shape[1]))
 
     # Helper: band indices around f0 using df
     def _band_indices(freq_array: np.ndarray, f0: float, df_hz: float):

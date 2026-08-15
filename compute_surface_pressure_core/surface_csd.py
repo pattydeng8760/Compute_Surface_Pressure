@@ -13,16 +13,18 @@ import scipy.signal as signal
 from scipy.signal import welch, coherence
 import multiprocessing
 from multiprocessing import Pool, cpu_count, Value, Lock
+from antares import Reader, Base, Zone, Instant, Writer
 from .utils import next_greater_power_of_2
 
 
-def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str, var: str, dt: float, reload: bool = True, block_size: int = 1000, nchunk: int = 3):
+def CSD_surface_data(farfield_dir:str, mic_file:str, mic_num:int, surface_pressure_data: str, var: str, dt: float, reload: bool = True, block_size: int = 1000, nchunk: int = 3):
     """
     The CSD_surface_data function computes the Cross Spectral Density (CSD) and Magnitude Squared Coherence between surface pressure data and a reference far-field microphone signal. 
     The computation is performed in blocks to optimize memory usage and speed, and it can be parallelized across multiple CPU cores.
     
     Args: 
-        farfield_data (str): Path to the HDF5 file containing the far-field microphone data.
+        farfield_dir (str): parent path to the HDF5 file containing the far-field microphone data.
+        mic_file (str): Name of the HDF5 file containing the far-field microphone data.
         mic_num (int): The microphone number to be used as the reference signal.
         surface_pressure_data (str): Path to the HDF5 file containing the surface pressure data.
         var (str): The variable name in the HDF5 file for surface pressure data.
@@ -41,13 +43,19 @@ def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str,
     fs = 1/dt
     # Computing the CSD in blocks
     csd_file_path = surface_pressure_data.replace('.hdf5', '_csd.hdf5')
+    farfield_data = os.path.join(farfield_dir, mic_file)
+    
     if os.path.exists(csd_file_path) and not reload:
-        print(f"{csd_file_path} already exists. Skipping CSD computation.")
+        print("----> CSD file already exist, Reload is set to False.")
+        print(f"      CSD File Path: {csd_file_path} ")
+        with h5py.File(csd_file_path, 'r') as h5f:
+            date_extracted = h5f.attrs.get('Date Computed', 'Unknown')
+        print("      The CSD data was previously computed on: {0:s}".format(date_extracted))
     else:
         print("----> Computing CSD for surface pressure data.")
         # loading the the reference pressure signal
-        print("The reference signal is loaded from \n   {0:s}".format(farfield_data))
-        print("The reference microphone number is mic {0:d}".format(mic_num))
+        print("      The reference signal is loaded from \n        {0:s}".format(farfield_data))
+        print("      The reference microphone number is mic {0:d}".format(mic_num))
         with h5py.File(farfield_data, 'r') as h5f:
             p_ref = h5f['Microphone_data/mic_{}/mic_{}_pressure'.format(mic_num, mic_num)][:].flatten()
         # Load the pressure data from the HDF5 file.
@@ -58,15 +66,15 @@ def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str,
                 data = np.swapaxes(data, 0, 1)
                 
         nt, nx = data.shape
-        print("The surface data is %d (nodes) x %d (timesteps)" % (nx, nt))
-        print("The reference data is %d (timesteps)" % (len(p_ref)))
+        print("      The surface data is %d (nodes) x %d (timesteps)" % (nx, nt))
+        print("      The reference data is %d (timesteps)" % (len(p_ref)))
         n_ref = p_ref.shape[0]
         # Align lengths by truncation
         n_timesteps = min(nt, n_ref)
         if n_timesteps != nt or n_timesteps != n_ref:
             data  = data[:n_timesteps, :]
             p_ref = p_ref[:n_timesteps]
-            print(f"After alignment: {n_timesteps} timesteps each")
+            print(f"        After alignment: {n_timesteps} timesteps each")
     
         # Determine number of blocks.
         nblocks = int(np.ceil(nx / block_size))
@@ -88,19 +96,20 @@ def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str,
         # Extract frequency (assumed identical across blocks) and combine PSD blocks.
         f_csd = results[0][2]
         f_coh = results[0][3]
-        print("The csd frequency shape is: ", f_csd.shape)
-        print("The coherence frequency shape is: ", f_coh.shape)
+        print("\n      The csd frequency shape is: ", f_csd.shape)
+        print("      The coherence frequency shape is: ", f_coh.shape)
         # Concatenate along axis 0 so that the final shape is (n_nodes, n_freq).
         csd_all = np.concatenate([res[0] for res in results], axis=0)
         coh_all = np.concatenate([res[1] for res in results], axis=0)
         
         # Save the computed frequency and PSD data.
-        print("Saving CSD data to file:", csd_file_path)
+        print("      Saving CSD data to file:", csd_file_path)
         with h5py.File(csd_file_path, 'w') as h5f_out:
             h5f_out.create_dataset('frequency_csd', data=f_csd)
             h5f_out.create_dataset('pressure_csd', data=csd_all)
             h5f_out.create_dataset('frequency_coh', data=f_coh)
             h5f_out.create_dataset('pressure_coh', data=coh_all)
+            h5f_out.attrs['Date Computed'] = datetime.now().strftime("%Y-%m-%d")
             h5f_out.attrs['Reference Microphone'] = mic_num
             h5f_out.attrs['Reference Signal'] = 'Microphone_data/mic_{mic_num}/mic_{mic_num}_pressure'
             h5f_out.attrs['Reference Signal Path'] = farfield_data
@@ -109,7 +118,7 @@ def CSD_surface_data(farfield_data:str, mic_num:int, surface_pressure_data: str,
             h5f_out.attrs['Nodes'] = nx
             h5f_out.attrs['Time Steps'] = nt
     
-    header = "CSD Computation Complete"
+    header = "       CSD Computation Complete"
     print(f"\n{header:.^80}\n")
     return csd_file_path
 
@@ -138,7 +147,7 @@ def compute_CSD_block(args):
     """
     block_data, p_ref, dt, nchunk, block_number = args
     if block_number % 100 == 0:  
-        print(f"    Computing CSD for block {block_number}")
+        print(f"      Computing CSD for block {block_number}")
         
     n_nodes = block_data.shape[1]
     n_time = block_data.shape[0]
@@ -169,8 +178,9 @@ def compute_CSD_block(args):
     return csd_block, coh_block, f_csd, f_coh
 
 
-def source_csd(output_path: str,mesh_fileDir: str, mesh_fileName: str, surface_mesh: str,
-               data: str,data_csd: str,freq_select: list = [500, 2000], half_window: int = 0) -> None:
+def source_csd(output_path: str, surface_mesh: str, data: str,data_csd: str,
+            freq_select: list = [500, 2000], 
+            half_window: int = 0) -> None:
     """
     This function outputs the surface pressure CSD data for visualization in ParaView. 
     It reads the surface mesh and the corresponding pressure data (mean, RMS, min) and PSD data from HDF5 files, 
@@ -187,7 +197,6 @@ def source_csd(output_path: str,mesh_fileDir: str, mesh_fileName: str, surface_m
         half_window (int, optional): Half-width of the frequency window for averaging. Defaults to 0 (no averaging).
     """
     # ——— Load surface mesh geometry ———
-    base_mesh = os.path.join(mesh_fileDir, mesh_fileName)
     print(f"\n{'Performing Surface Source Localization based on CSD':.^80}\n")
     print('----> Loading the Airfoil Surface Mesh')
     reader = Reader('hdf_antares')
@@ -214,7 +223,7 @@ def source_csd(output_path: str,mesh_fileDir: str, mesh_fileName: str, surface_m
 
     assert p_hat.shape[0] == num_nodes, \
         'Node count mismatch between mesh and pressure data'
-    print(f"The pressure data is {p_hat.shape[0]} nodes × {p_hat.shape[1]} frequency bins")
+    print(f"      The pressure data is {p_hat.shape[0]} nodes × {p_hat.shape[1]} frequency bins")
 
     # ——— Prepare animated base ———
     print('\n----> Saving the surface FFT data for visualization')

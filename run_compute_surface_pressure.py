@@ -52,7 +52,7 @@ CONFIG: dict[str, Any] = {
 
     # Workflows
     "psd": True,
-    "csd": False,
+    "csd": True,
     "fft": False,
     "surf_line": False,
 
@@ -63,9 +63,9 @@ CONFIG: dict[str, Any] = {
     "df": 50.0,
 
     # CSD settings; required only when csd=True
-    "mic_dir": None,
-    "mic_file": None,
-    "mic_num": 1,
+    "mic_dir": "/scratch/denggua1/Bombardier_LES/B_10AOA_LES/RUN_Fine_Jul25/FWH_Airfoil/FWHpostpro_TTG",
+    "mic_file": 'B_10AOA_U30_LES_Solid_Airfoil_Mic_Data.h5',
+    "mic_num": 68,
 
     # Surface-line settings; used only when surf_line=True
     "AoA": 10.0,

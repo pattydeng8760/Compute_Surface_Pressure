@@ -70,6 +70,9 @@ def parse_arguments(argv=None):
 class SurfacePressure():
     def __init__(self, args):
         self.args = args
+        logfile = os.path.join(args.working_dir,'log_Surface_Pressure_'+datetime.now().strftime("%Y%m%d_%H%M")+'.txt')
+        sys.stdout = open(logfile, "w", buffering=1)
+        self.start_time = time.time()
         text = "Beginning Compute Surface Pressure Post-Processing"
         print(f'\n{text:=^100}\n')
         self.sol_dir = args.sol_dir
@@ -159,12 +162,12 @@ class SurfacePressure():
             surface_pressure_psd_data = PSD_surface_data(self.surface_pressure_data, 
                 self.var, 
                 self.dt, 
-                reload=True, 
+                reload=self.reload, 
                 block_size=self.psd.block_size,
+                nchunk = self.psd.nchunk
             )
             
             source_psd(self.working_dir, 
-                self.mesh_file, 
                 self.airfoil_mesh, 
                 self.surface_pressure_data, 
                 surface_pressure_psd_data, 
@@ -182,13 +185,12 @@ class SurfacePressure():
                 self.surface_pressure_data, 
                 self.var, 
                 self.dt, 
-                reload=True, 
-                block_size=args.csd.block_size, 
+                reload=self.reload, 
+                block_size=self.csd.block_size,
                 nchunk=self.csd.nchunk
             )
             
             source_csd(self.working_dir, 
-                self.mesh_file, 
                 self.airfoil_mesh, 
                 self.surface_pressure_data, 
                 surface_pressure_csd_data, 
@@ -227,6 +229,10 @@ class SurfacePressure():
                 airfoil_file=self.surf_line.airfoil_file, 
                 camber_file=self.surf_line.camber_file
             )
+        self.end_time = time.time()
+        print(f"\nTotal execution time: {self.end_time - self.start_time:.2f} s\n")
+        text = "Complete Surface Pressure Post-Processing"
+        print(f'\n{text:=^100}\n')
 
 def main(argv=None):
     """

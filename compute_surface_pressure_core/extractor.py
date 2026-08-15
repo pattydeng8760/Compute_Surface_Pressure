@@ -81,10 +81,10 @@ def extract_files(sol_dir:str, working_dir:str, option:int=1, nskip:int=1, max_f
     list_files=[]
     list_files+=sorted(glob.glob('{0:s}/*.h5'.format(output)))
     ntime = np.shape(list_files)[0]
-    output = os.path.abspath(output)
-    print('\n----> The files are copied to: \n   %s' %output)
+    print('\n----> The files are copied to: %s' %output)
     text = 'File Extraction Complete'
     print(f'\n{text:.^80}\n')  
+    output = os.path.abspath(output)
     return ntime, output
 
 
@@ -152,12 +152,12 @@ def extract_surface(mesh_file:str,input_surface:list, working_dir:str,reload:boo
             nodes = merged[surf_name][0].shape[0]
         else: 
             nodes = merged['0000'][0].shape[0]
-    airfoil_mesh = os.path.abspath(airfoil_mesh)
     print('\n----> Output Statistics')
     print('      The Extracted surface mesh is saved in: %s' %airfoil_mesh)
     print('      The number of nodes in on the airofoil surface is: %d nodes' %nodes)
     text = 'Surface Extraction Complete!'
     print(f'\n{text:.^80}\n')  
+    airfoil_mesh = os.path.abspath(airfoil_mesh)
     return airfoil_mesh
 
 
@@ -179,7 +179,7 @@ def extract_data(working_dir, data_dir, airfoil_mesh, dtype='float64', reload:bo
     text = 'Beginning Data Extraction'
     print(f'\n{text:.^80}\n') 
     if os.path.exists(os.path.join(working_dir,'pressure_airfoil.hdf5')) == True and reload == False:
-        print('----> The pressure data is already extracted at: \n{0:s}'.format(working_dir,'pressure_airfoil.hdf5'))
+        print('----> The pressure data is already extracted at: {0:s}'.format(working_dir,'pressure_airfoil.hdf5'))
         print('\n----> Loading the pressure data')
         surface_pressure_data = os.path.join(working_dir,'pressure_airfoil.hdf5')
         with h5py.File(surface_pressure_data, 'r') as f:
@@ -238,7 +238,7 @@ def extract_data(working_dir, data_dir, airfoil_mesh, dtype='float64', reload:bo
             f.attrs['Mesh Path'] = airfoil_mesh
         # Path to the surface pressure data
     print('\n----> Statistics of the extracted pressure data')
-    print('      The pressure data is saved in: \n      %s' %surface_pressure_data)
+    print('      The pressure data is saved in: %s' %surface_pressure_data)
     print('      The pressure data storage size is {0:2.4f} MB' .format(os.path.getsize(surface_pressure_data)/1e6))
     print('      The time step is dt = {0:5.6e}' .format(dt))
     text = 'Data Extraction Complete!'
